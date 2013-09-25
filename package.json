@@ -1,0 +1,25 @@
+{
+  "name": "semanticmerge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JavaScript parser for semanticmerge",
+  "main": "parser.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": "",
+  "author": "Alberto Gimeno <gimenete@gmail.com>",
+  "license": "All rights reserved",
+  "dependencies": {
+    "esprima": "~1.0.4",
+    "yamljs": "~0.1.4",
+    "commander": "~1.2.0",
+    "underscore": "~1.4.4"
+  },
+  "devDependencies": {
+    "mocha": "~1.12.0"
+  }
+}
