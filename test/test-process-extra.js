@@ -165,18 +165,18 @@ describe('Parser', function() {
 									"type": "function",
 									"locationSpan": {
 										"start": [1,11],
-										"end": [1,31]
+										"end": [1,33]
 									},
-									"span": [11,31]
+									"span": [11,33]
 								},
 								{
 									"name": "baz",
 									"type": "function",
 									"locationSpan": {
-										"start": [1,31],
+										"start": [1,33],
 										"end": [1,53]
 									},
-									"span": [31,53]
+									"span": [33,53]
 								}
 							]
 						}
