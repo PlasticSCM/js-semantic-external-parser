@@ -93,7 +93,8 @@ describe('Parser', function() {
 		})
 
 		// it('should ignore anonymous functions', function(done) {
-		// 	parser.processCodeExtra('var foo = "bar"; return', function(err, data) {
+		// 	parser.includeVars = true
+		// 	parser.processCodeExtra('var foo = { bar: function() { } }; return', function(err, data) {
 		// 		assert.ifError(err)
 		// 		assert.ok(data)
 		// 		assert.ok(_.isEqual({

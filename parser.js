@@ -13,6 +13,7 @@ exports.processFile = function(input, output, callback) {
 		var parser = exports.createParser()
 		parser.text = true
 		parser.ignoreAnonymFunctions = true
+		parser.compilationUnitSpans = true
 		parser.processCodeExtra(code, function(err, data) {
 			if (err) { return callback(err) }
 
@@ -249,10 +250,17 @@ exports.createParser = function(debug) {
 		} else if (node.type === 'ReturnStatement') {
 			processNode(node.argument, children)
 		} else if (node.type === 'VariableDeclaration') {
-			if (node.declarations.length === 1) { // preserve span if only one declaration
-				processNode(node.declarations, children, metaStart(node), metaRangeStart(node))
+			if (false && parser.includeVars && node.declarations.length === 1) {
+				console.log('include')
+				var _node = node.init
+				_node.id = { name: node.id.name }
+				processNode(_node, children, metaStart(node, start), metaRangeStart(node, rangeStart))
 			} else {
-				processNode(node.declarations, children)
+				if (node.declarations.length === 1) { // preserve span if only one declaration
+					processNode(node.declarations, children, metaStart(node), metaRangeStart(node))
+				} else {
+					processNode(node.declarations, children)
+				}
 			}
 		} else if (node.type === 'VariableDeclarator') {
 			if (node.id && node.id.type === 'Identifier' && node.init && node.init.type === 'FunctionExpression') {
@@ -482,14 +490,20 @@ exports.createParser = function(debug) {
 				}
 			}
 
-			data.locationSpan = {
-				start: [tree.loc.end.line === 0 ? 0 : 1,0],
-				end: [tree.loc.end.line, tree.loc.end.column]
-			}
+			if (parser.compilationUnitSpans) {
+				if (tree.loc) {
+					data.locationSpan = {
+						start: [tree.loc.end.line === 0 ? 0 : 1,0],
+						end: [tree.loc.end.line, tree.loc.end.column]
+					}
+				}
 
-			data.footerSpan = [0, 0]
-			// data.headerSpan = [0, 0]
-			data.span = [0, tree.range[1]]
+				data.footerSpan = [0, 0]
+				// data.headerSpan = [0, 0]
+				if (tree.range) {
+					data.span = [0, tree.range[1]]
+				}
+			}
 
 				// 'footerSpan : [21, 22]',
 				// 'headerSpan : [0, 1]',
