@@ -340,7 +340,7 @@ exports.createParser = function(debug) {
 		} else if (node.type === 'ReturnStatement') {
 			processNode(node.argument, children)
 		} else if (node.type === 'VariableDeclaration') {
-			if (parser.includeVars && node.declarations.length === 1 && node.declarations[0].init.type === 'ObjectExpression') {
+			if (parser.includeVars && node.declarations.length === 1 && node.declarations[0].init && node.declarations[0].init.type === 'ObjectExpression') {
 				var oldNode = node
 				node = node.declarations[0]
 				node.loc = oldNode.loc
@@ -466,7 +466,7 @@ exports.createParser = function(debug) {
 		} else if (node.type === 'BreakStatement') {
 		} else if (node.type === 'ThisExpression') {
 		} else {
-			if (true || debug) {
+			if (debug) {
 				console.log('unknown node type! ---------------------------------', node)
 			}
 		}
@@ -566,16 +566,16 @@ exports.createParser = function(debug) {
 
 							if (child.type === 'text') {
 								var str = parser.code.substring(child.span[0], child.span[1])
-								if (str.match(/^[\s,]+$/)) {
-									if (nextNode) {
-										nextNode.locationSpan.start = child.locationSpan.start
-										nextNode.span[0] = child.span[0]
+								if (str.match(/^[\s,;]+$/)) {
+									if (previousNode) {
+										previousNode.locationSpan.end = child.locationSpan.end
+										previousNode.span[1] = child.span[1]
 										children.splice(i, 1)
 										i--
 										continue
-									} else if (previousNode) {
-										previousNode.locationSpan.end = child.locationSpan.end
-										previousNode.span[1] = child.span[1]
+									} else if (nextNode) {
+										nextNode.locationSpan.start = child.locationSpan.start
+										nextNode.span[0] = child.span[0]
 										children.splice(i, 1)
 										i--
 										continue
