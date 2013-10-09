@@ -186,7 +186,95 @@ exports.createParser = function(debug) {
 			return
 		}
 
-		var data = {}
+		function createNode(data, newlastPoint, processFunction) {
+			if (comments) {
+				var preComment = null, postComment = null
+				var lastUsedCommentIndex = -1
+				for (var i = 0; i < comments.length; i++) {
+					var comment = comments[i]
+
+					if (comment.range[0] < data.span[0]) {
+						preComment = comment
+						lastUsedCommentIndex = i
+					} else if (comment.range[1] > data.span[1]) {
+						postComment = comment
+						lastUsedCommentIndex = i
+						break
+					}
+				}
+				if (preComment) {
+					var str = parser.code.substring(preComment.range[1], data.span[0])
+					if (str.trim().length === 0) {
+						data.span[0] = preComment.range[0]
+						data.locationSpan.start = [preComment.loc.start.line, preComment.loc.start.column]
+					}
+				}
+				if (postComment) {
+					var str = parser.code.substring(data.span[1], postComment.range[0])
+					if (str.trim().length === 0 && !breaksLine(str)) {
+						data.span[1] = postComment.range[1]
+						data.locationSpan.end = [postComment.loc.end.line, postComment.loc.end.column]
+					}
+				}
+
+				if (lastUsedCommentIndex >= 0) {
+					comments = comments.slice(lastUsedCommentIndex+1)
+				}
+			}
+
+			if (parser.text) {
+				if (lastPoint) {
+					if (data.span[0] > lastPoint.span) {
+						children.push({
+							type: 'text',
+							locationSpan: {
+								start: [lastPoint.line, lastPoint.column],
+								end: data.locationSpan.start
+							},
+							span: [lastPoint.span, data.span[0]]
+						})
+					}
+				} else {
+					if (data.span[0] > 0) {
+						children.push({
+							type: 'text',
+							locationSpan: {
+								start: [1,0],
+								end: data.locationSpan.start
+							},
+							span: [0, data.span[0]]
+						})
+					}
+				}
+			}
+			lastPoint = newlastPoint
+			var childnodes = []
+			processFunction(node, childnodes)
+			if (childnodes.length > 0) {
+				data.children = childnodes
+			}
+
+			if (newlastPoint && lastPoint && lastPoint.span > newlastPoint.span) {
+				childnodes.push({
+					type: 'text',
+					locationSpan: {
+						start: [lastPoint.line, lastPoint.column],
+						end: [data.locationSpan.end[0], data.locationSpan.end[1]-1]
+					},
+					span: [lastPoint.span, data.span[1]-1]
+				})
+			}
+
+			children.push(data)
+			if (parser.text) {
+				lastPoint = {
+					span: data.span[1],
+					line: data.locationSpan.end[0],
+					column: data.locationSpan.end[1]
+				}
+			}
+		}
+
 		if (node.type === 'Program') {
 			processNode(node.body, children)
 		} else if (node.type === 'BlockStatement') {
@@ -250,11 +338,31 @@ exports.createParser = function(debug) {
 		} else if (node.type === 'ReturnStatement') {
 			processNode(node.argument, children)
 		} else if (node.type === 'VariableDeclaration') {
-			if (false && parser.includeVars && node.declarations.length === 1) {
-				console.log('include')
-				var _node = node.init
-				_node.id = { name: node.id.name }
-				processNode(_node, children, metaStart(node, start), metaRangeStart(node, rangeStart))
+			if (parser.includeVars && node.declarations.length === 1 && node.declarations[0].init.type === 'ObjectExpression') {
+				var oldNode = node
+				node = node.declarations[0]
+				node.loc = oldNode.loc
+				node.range = oldNode.range
+
+				var data = {}
+				data.name = (node.id && node.id.name) || ''
+				data.type = 'var'
+
+				// console.log('node', JSON.stringify(node.init, null, '\t'))
+				var init = node.init
+
+				var newlastPoint = {
+					span: init.range[0]+1,
+					line: init.loc.start.line,
+					column: init.loc.start.column
+				}
+
+				addMeta(node, data, start, rangeStart)
+				
+				createNode(data, newlastPoint, function(node, childnodes) {
+					processNode(node.init, childnodes)
+				})
+
 			} else {
 				if (node.declarations.length === 1) { // preserve span if only one declaration
 					processNode(node.declarations, children, metaStart(node), metaRangeStart(node))
@@ -274,7 +382,11 @@ exports.createParser = function(debug) {
 		} else if (node.type === 'Property') {
 			if (node.key && node.key.type === 'Identifier' && node.key.name && node.value && node.value.type === 'FunctionExpression') {
 				var _node = node.value
-				_node.id = { name: node.key.name } // TODO: loc and range
+				_node.id = { name: node.key.name }
+				if (node.range) {
+					_node.range[0] = node.range[0]
+					_node.loc.start = node.loc.start
+				}
 				processNode(_node, children)
 			} else {
 				processNode(node.key, children)
@@ -324,6 +436,7 @@ exports.createParser = function(debug) {
 			processNode(node.right, children)
 
 		} else if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression') {
+			var data = {}
 			data.name = (node.id && node.id.name) || ''
 			data.type = 'function'
 
@@ -337,91 +450,10 @@ exports.createParser = function(debug) {
 			}
 
 			addMeta(node, data, start, rangeStart)
-			if (comments) {
-				var preComment = null, postComment = null
-				var lastUsedCommentIndex = -1
-				for (var i = 0; i < comments.length; i++) {
-					var comment = comments[i]
-
-					if (comment.range[0] < data.span[0]) {
-						preComment = comment
-						lastUsedCommentIndex = i
-					} else if (comment.range[1] > data.span[1]) {
-						postComment = comment
-						lastUsedCommentIndex = i
-						break
-					}
-				}
-				if (preComment) {
-					var str = parser.code.substring(preComment.range[1], data.span[0])
-					if (str.trim().length === 0) {
-						data.span[0] = preComment.range[0]
-						data.locationSpan.start = [preComment.loc.start.line, preComment.loc.start.column]
-					}
-				}
-				if (postComment) {
-					var str = parser.code.substring(data.span[1], postComment.range[0])
-					if (str.trim().length === 0 && !breaksLine(str)) {
-						data.span[1] = postComment.range[1]
-						data.locationSpan.end = [postComment.loc.end.line, postComment.loc.end.column]
-					}
-				}
-
-				if (lastUsedCommentIndex >= 0) {
-					comments = comments.slice(lastUsedCommentIndex+1)
-				}
-			}
-			if (parser.text) {
-				if (lastPoint) {
-					if (data.span[0] > lastPoint.span) {
-						children.push({
-							type: 'text',
-							locationSpan: {
-								start: [lastPoint.line, lastPoint.column],
-								end: data.locationSpan.start
-							},
-							span: [lastPoint.span, data.span[0]]
-						})
-					}
-				} else {
-					if (data.span[0] > 0) {
-						children.push({
-							type: 'text',
-							locationSpan: {
-								start: [1,0],
-								end: data.locationSpan.start
-							},
-							span: [0, data.span[0]]
-						})
-					}
-				}
-			}
-			lastPoint = newlastPoint
-			var childnodes = []
-			processNode(node.body, childnodes)
-			if (childnodes.length > 0) {
-				data.children = childnodes
-			}
-
-			if (parser.text && lastPoint.span > newlastPoint.span) {
-				childnodes.push({
-					type: 'text',
-					locationSpan: {
-						start: [lastPoint.line, lastPoint.column],
-						end: [data.locationSpan.end[0], data.locationSpan.end[1]-1]
-					},
-					span: [lastPoint.span, data.span[1]-1]
-				})
-			}
-
-			children.push(data)
-			if (parser.text) {
-				lastPoint = {
-					span: data.span[1],
-					line: data.locationSpan.end[0],
-					column: data.locationSpan.end[1]
-				}
-			}
+			
+			createNode(data, newlastPoint, function(node, childnodes) {
+				processNode(node.body, childnodes)
+			})
 
 		} else if (node.type === 'Identifier') {
 			// such as "foo" (without the quotes)
