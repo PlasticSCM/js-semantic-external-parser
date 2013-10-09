@@ -14,6 +14,8 @@ exports.processFile = function(input, output, callback) {
 		parser.text = true
 		parser.ignoreAnonymFunctions = true
 		parser.compilationUnitSpans = true
+		parser.removeSimpleTextNodes = true
+		parser.includeVars = true
 		parser.processCodeExtra(code, function(err, data) {
 			if (err) { return callback(err) }
 
@@ -348,13 +350,12 @@ exports.createParser = function(debug) {
 				data.name = (node.id && node.id.name) || ''
 				data.type = 'var'
 
-				// console.log('node', JSON.stringify(node.init, null, '\t'))
 				var init = node.init
 
 				var newlastPoint = {
 					span: init.range[0]+1,
 					line: init.loc.start.line,
-					column: init.loc.start.column
+					column: init.loc.start.column+1
 				}
 
 				addMeta(node, data, start, rangeStart)
@@ -537,10 +538,6 @@ exports.createParser = function(debug) {
 				}
 			}
 
-				// 'footerSpan : [21, 22]',
-				// 'headerSpan : [0, 1]',
-				// 'span : [0, 22]',
-
 			if (tree.errors && tree.errors.length > 0) {
 				var errors = []
 				for (var i = 0; i < tree.errors.length; i++) {
@@ -555,6 +552,42 @@ exports.createParser = function(debug) {
 
 			if (debug) {
 				console.log(JSON.stringify(data, null, '\t'))
+			}
+
+			if (parser.removeSimpleTextNodes) {
+				function removeSimpleNodes(node) {
+					
+					var children = node.children
+					if (children) {
+						for (var i = 0; i < children.length; i++) {
+							var child = children[i]
+							var nextNode = children[i+1]
+							var previousNode = children[i-1]
+
+							if (child.type === 'text') {
+								var str = parser.code.substring(child.span[0], child.span[1])
+								if (str.match(/^[\s,]+$/)) {
+									if (nextNode) {
+										nextNode.locationSpan.start = child.locationSpan.start
+										nextNode.span[0] = child.span[0]
+										children.splice(i, 1)
+										i--
+										continue
+									} else if (previousNode) {
+										previousNode.locationSpan.end = child.locationSpan.end
+										previousNode.span[1] = child.span[1]
+										children.splice(i, 1)
+										i--
+										continue
+									}
+								}
+							}
+							removeSimpleNodes(child)
+						}
+					}
+				}
+
+				removeSimpleNodes(data)
 			}
 
 			callback(null, data)
