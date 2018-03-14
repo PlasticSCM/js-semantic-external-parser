@@ -19,6 +19,7 @@ function runAsShell(flag) {
 	})
 
 	var fileIn  = null
+	var encoding = null
 	var fileOut = null
 	rl.on('line', function(cmd) {
 		if (cmd === 'end') {
@@ -26,6 +27,8 @@ function runAsShell(flag) {
 			finish()
 		} else if (!fileIn) {
 			fileIn = cmd
+		} else if (!encoding) {
+			encoding = cmd
 		} else {
 			fileOut = cmd
 			addEvent('fileIn = '+JSON.stringify(fs.readFileSync(fileIn, 'utf8')))
@@ -40,6 +43,7 @@ function runAsShell(flag) {
 					process.stdout.write('OK\r\n')
 				}
 				fileIn  = null
+				encoding = null
 				fileOut = null
 			})
 		}
